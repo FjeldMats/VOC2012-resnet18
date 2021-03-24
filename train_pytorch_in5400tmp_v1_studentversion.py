@@ -1,12 +1,8 @@
-
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim import lr_scheduler
 from torch.nn import functional as F
-
-
 
 import torchvision
 from torchvision import datasets, models, transforms, utils
@@ -14,7 +10,6 @@ from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('TkAgg') # to work on x11 forwarding
-
 
 from torch import Tensor
 
@@ -193,8 +188,9 @@ def traineval2_model_nocv(dataloader_train, dataloader_test, model, criterion, o
     print()
 
     if avgperfmeasure > best_measure: #higher is better or lower is better?
-      bestweights= model.state_dict()
+      bestweights = model.state_dict()
       #TODO track current best performance measure and epoch
+      torch.save(model.state_dict(), f"models/model{avgperfmeasure}.pth")
 
       #TODO save your scores
 
@@ -216,10 +212,10 @@ def runstuff():
   config = dict()
 
   config['use_gpu'] = True #True #TODO change this to True for training on the cluster, eh
-  config['lr'] = 0.0005
-  config['batchsize_train'] = 32
+  config['lr'] = 0.001
+  config['batchsize_train'] = 16
   config['batchsize_val'] = 64
-  config['maxnumepochs'] = 35
+  config['maxnumepochs'] = 20
   #config['maxnumepochs'] = 10
 
   config['scheduler_stepsize'] = 10
@@ -288,8 +284,10 @@ def runstuff():
       device= torch.device('cpu')
 
   model = models.resnet18(pretrained=True) #pretrained resnet18
+  """
   for param in model.parameters():
       param.requires_grad = False
+  """
   #overwrite last linear layer
   num_ftrs = model.fc.in_features
   model.fc = nn.Linear(num_ftrs, config['numcl'])
@@ -300,6 +298,7 @@ def runstuff():
 
   # Observe that all parameters are being optimized
   someoptimizer = optim.Adam(model.fc.parameters(), lr=config['lr'])
+  #someoptimizer = optim.SGD(model.fc.parameters(), lr=config['lr'])
 
   # Decay LR by a factor of 0.3 every X epochs
   somelr_scheduler = lr_scheduler.StepLR(someoptimizer, step_size=config['scheduler_stepsize'], gamma=config['scheduler_factor'])
@@ -312,8 +311,6 @@ def runstuff():
 # for part2
 ###########
 '''
-
-
 def setbyname2(targetmodel,name,value):
 
     def iteratset(obj,components,value,nametail=[]):
