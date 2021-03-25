@@ -122,7 +122,7 @@ model = models.resnet18(pretrained=True) #pretrained resnet18
 num_ftrs = model.fc.in_features
 model.fc = nn.Linear(num_ftrs, config['numcl'])
 
-model.load_state_dict(torch.load("models/model0.8141165779845314.pth"))
+model.load_state_dict(torch.load("models/model0.814307410057921.pth"))
 model = model.to(device)
 print("loaded model")
 
