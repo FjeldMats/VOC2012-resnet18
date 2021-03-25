@@ -22,6 +22,13 @@ import PIL.Image
 import sklearn.metrics
 
 from vocparseclslabels import PascalVOC
+import PySimpleGUI as sg
+import PIL
+from PIL import Image
+import io
+import base64
+import os
+
 
 from typing import Callable, Optional
 class dataset_voc(Dataset):
@@ -96,14 +103,14 @@ config['numcl'] = 20
 
 #datasets
 image_datasets={}
-image_datasets['train']=dataset_voc(root_dir='VOCdevkit/VOC2012',trvaltest=0, transform=data_transforms['train'])
 image_datasets['val']=dataset_voc(root_dir='VOCdevkit/VOC2012',trvaltest=1, transform=data_transforms['val'])
 
-#dataloaders
-#TODO use num_workers=1
-bach_size = {"train":config['batchsize_train'],"val":config['batchsize_val']}
-dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], bach_size[x], shuffle=True) for x in ['train', 'val']}
+print("dataset")
 
+#dataloaders
+dataloader = torch.utils.data.DataLoader(image_datasets['val'], config['batchsize_val'], shuffle=True)
+
+print("dataloader")
 
 if True == config['use_gpu']:
     device= torch.device('cuda:0')
@@ -111,13 +118,13 @@ if True == config['use_gpu']:
 else:
     device= torch.device('cpu')
 
-
 model = models.resnet18(pretrained=True) #pretrained resnet18
 num_ftrs = model.fc.in_features
 model.fc = nn.Linear(num_ftrs, config['numcl'])
 
-model.load_state_dict(torch.load("models/model0.8130129992835468.pth"))
+model.load_state_dict(torch.load("models/model0.8141165779845314.pth"))
 model = model.to(device)
+print("loaded model")
 
 def evaluate_meanavgprecision(model, dataloader, criterion, device, numcl):
 
@@ -133,8 +140,10 @@ def evaluate_meanavgprecision(model, dataloader, criterion, device, numcl):
     ys = [[] for j in range(numcl)]
     with torch.no_grad():
       losses = []
+      print('eval',end='')
       for batch_idx, data in enumerate(dataloader):
-
+          if batch_idx % 10 == 0:
+              print('.',end='')
           #convert list of tensors to tensors
           labels = data['label']
           inputs = data['image'].to(device)
@@ -161,8 +170,7 @@ def evaluate_meanavgprecision(model, dataloader, criterion, device, numcl):
                   ys[c].append(y[i])
 
           # save some data
-
-          for fname, label, pred  in zip(data['filename'], labels, cpuout):
+          for fname, label, pred in zip(data['filename'], labels, cpuout):
               fnames.append(f"{fname}.jpg")
               concat_labels.append(label)
               concat_pred.append(m(pred))
@@ -172,9 +180,6 @@ def evaluate_meanavgprecision(model, dataloader, criterion, device, numcl):
 
     return avgprecs, np.mean(losses), concat_labels, concat_pred, fnames
 
-
-avgprecs, loss, concat_labels, concat_pred, fnames = evaluate_meanavgprecision(model, dataloaders["val"], yourloss(), device, config['numcl'])
-
 classes = ['aeroplane', 'bicycle', 'bird', 'boat',
     'bottle', 'bus', 'car', 'cat', 'chair',
     'cow', 'diningtable', 'dog', 'horse',
@@ -182,33 +187,7 @@ classes = ['aeroplane', 'bicycle', 'bird', 'boat',
     'sheep', 'sofa', 'train',
     'tvmonitor']
 
-
-import random
-
-for i in range(10):
-    num = random.randint(0,len(fnames))
-    for j in range(20):
-        print(f"{classes[j]}: {concat_pred[num][j]} {concat_labels[num][j]}")
-
-    img = mpimg.imread(f'VOCdevkit/VOC2012/JPEGImages/{fnames[num]}')
-    imgplot = plt.imshow(img)
-    plt.show()
-    print()
-
-import PySimpleGUI as sg
-import PIL
-from PIL import Image
-import io
-import base64
-import os
-
-"""
-    Using PIL with PySimpleGUI
-    This image viewer uses both a thumbnail creation function and an image resizing function that
-    you may find handy to include in your code.
-    Copyright 2020 PySimpleGUI.org
-"""
-
+CUR_CLASS = 0
 THUMBNAIL_SIZE = (200,200)
 IMAGE_SIZE = (800,800)
 THUMBNAIL_PAD = (1,1)
@@ -225,8 +204,6 @@ def make_square(im, min_size=256, fill_color=(0, 0, 0, 0)):
     new_im = Image.new('RGBA', (size, size), fill_color)
     new_im.paste(im, (int((size - x) / 2), int((size - y) / 2)))
     return new_im
-
-
 def convert_to_bytes(file_or_bytes, resize=None, fill=False):
     '''
     Will convert into bytes and optionally resize an image that is a file or a base64 bytes object.
@@ -258,10 +235,6 @@ def convert_to_bytes(file_or_bytes, resize=None, fill=False):
         img.save(bio, format="PNG")
         del img
         return bio.getvalue()
-
-
-
-
 def display_image_window(filename):
     try:
         layout = [[sg.Image(data=convert_to_bytes(filename, IMAGE_SIZE), enable_events=True)]]
@@ -269,26 +242,23 @@ def display_image_window(filename):
     except Exception as e:
         print(f'** Display image error **', e)
         return
-
-
 def make_thumbnails(flist):
-    layout = [[]]
+    layout = [[sg.Text(f'Sorted on: {classes[CUR_CLASS]}', k='SORTED_ON', size = (20, 1))],[]]
     for row in range(THUMBNAILS_PER_PAGE[1]):
         row_layout = []
         for col in range(THUMBNAILS_PER_PAGE[0]):
             try:
                 f = flist[row*THUMBNAILS_PER_PAGE[1] + col]
-                # row_layout.append(sg.B(image_data=convert_to_bytes(f, THUMBNAIL_SIZE), k=(row,col), pad=THUMBNAIL_PAD))
                 row_layout.append(sg.B('',k=(row,col), size=(0,0), pad=THUMBNAIL_PAD,))
             except:
                 pass
         layout += [row_layout]
-    layout += [[sg.B(sg.SYMBOL_LEFT + ' Prev', size=(10,3), k='-PREV-'), sg.B('Next '+sg.SYMBOL_RIGHT, size=(10,3), k='-NEXT-'), sg.B('Exit', size=(10,3)), sg.Slider((0,100), orientation='h', size=(50,15), enable_events=True, key='-SLIDER-')]]
+    layout += [
+    [sg.B(sg.SYMBOL_LEFT + ' Prev', size=(10,3), k='-PREV-'), sg.B('Next '+sg.SYMBOL_RIGHT, size=(10,3), k='-NEXT-'), sg.B('Exit', size=(10,3)), sg.Slider((0,100), orientation='h', size=(50,15), enable_events=True, key='-SLIDER-')],
+    [sg.B(sg.SYMBOL_LEFT + ' Prev Class', size=(10,3), k='-PREVCLASS-'),
+     sg.B('Next Class '+sg.SYMBOL_RIGHT, size=(10,3), k='-NEXTCASS-')]
+    ]
     return sg.Window('Thumbnails', layout, element_padding=(0, 0), margins=(0, 0), finalize=True, grab_anywhere=False, location=(0,0), return_keyboard_events=True)
-
-EXTS = ('png', 'jpg', 'gif')
-
-
 def display_images(t_win, offset, files):
     currently_displaying = {}
     row = col = 0
@@ -318,39 +288,77 @@ def display_images(t_win, offset, files):
     return offset, currently_displaying
 
 
-def main():
-    files = fnames
-    files.sort()
-    t_win = make_thumbnails(files)
-    offset, currently_displaying = display_images(t_win, 0, files)
-    # offset = THUMBNAILS_PER_PAGE[0] * THUMBNAILS_PER_PAGE[1]
-    # currently_displaying = {}
-    while True:
-        win, event, values = sg.read_all_windows()
-        print(event, values)
-        if win == sg.WIN_CLOSED:            # if all windows are closed
-            break
+avgprecs, loss, concat_labels, concat_pred, fnames = evaluate_meanavgprecision(model, dataloader, yourloss(), device, config['numcl'])
 
-        if event == sg.WIN_CLOSED or event == 'Exit':
-            break
+class Picture():
+    def __init__(self, filename, label, prediction):
+        self.filename = filename
+        self.label = label
+        self.prediction = prediction
 
-        if isinstance(event, tuple):
-            display_image_window(currently_displaying.get(event))
-            continue
-        elif event == '-SLIDER-':
-            offset = int(values['-SLIDER-']*len(files)/100)
-            event = '-NEXT-'
-        else:
-            t_win['-SLIDER-'].update(offset * 100 / len(files))
+class Files():
+    def __init__(self, pictures):
+        self.pictures = pictures
+        self.classpictures = []
+    def __len__(self):
+        return len(self.pictures)
+    def sortOnClass(self, class_idx, rev):
+        self.pictures.sort(key=lambda x: x.prediction[class_idx], reverse = rev)
+    def fnamelist(self):
+        lst = []
+        for p in self.pictures:
+            lst.append(p.filename)
+        return lst
 
-        if event == '-NEXT-' or event.endswith('Down'):
-            offset, currently_displaying = display_images(t_win, offset, files)
-        elif event == '-PREV-' or event.endswith('Up'):
-            offset -= THUMBNAILS_PER_PAGE[0]*THUMBNAILS_PER_PAGE[1]*2
-            if offset < 0:
-                offset = 0
-            offset, currently_displaying = display_images(t_win, offset, files)
+p = []
+for i in range(len(fnames)):
+    p.append(Picture(os.path.join(ROOT_FOLDER, fnames[i]), concat_labels[i], concat_pred[i]))
 
+f = Files(p)
+f.sortOnClass(0,True)
+files = f.fnamelist()
+t_win = make_thumbnails(files)
+offset, currently_displaying = display_images(t_win, 0, files)
+offset = THUMBNAILS_PER_PAGE[0] * THUMBNAILS_PER_PAGE[1]
 
-if __name__ == '__main__':
-    main()
+while True:
+    win, event, values = sg.read_all_windows()
+    if win == sg.WIN_CLOSED:            # if all windows are closed
+        break
+
+    if event == sg.WIN_CLOSED or event == 'Exit':
+        break
+
+    if isinstance(event, tuple):
+        display_image_window(currently_displaying.get(event))
+        continue
+    elif event == '-SLIDER-':
+        offset = int(values['-SLIDER-']*len(files)/100)
+        event = '-NEXT-'
+    else:
+        t_win['-SLIDER-'].update(offset * 100 / len(files))
+
+    if event == '-NEXT-' or event.endswith('Down'):
+        offset, currently_displaying = display_images(t_win, offset, files)
+    elif event == '-PREV-' or event.endswith('Up'):
+        offset -= THUMBNAILS_PER_PAGE[0]*THUMBNAILS_PER_PAGE[1]*2
+        if offset < 0:
+            offset = 0
+        offset, currently_displaying = display_images(t_win, offset, files)
+    if event == '-PREVCLASS-':
+        CUR_CLASS -= 1
+        if CUR_CLASS <= 0:
+            CUR_CLASS = 19
+        f.sortOnClass(CUR_CLASS, True)
+        files = f.fnamelist()
+        t_win.Element('SORTED_ON').Update(f'Sorted on: {classes[CUR_CLASS]}')
+        offset, currently_displaying = display_images(t_win, 0, files)
+
+    if event == '-NEXTCASS-':
+        CUR_CLASS += 1
+        if CUR_CLASS >= 20:
+            CUR_CLASS = 0
+        f.sortOnClass(CUR_CLASS, True)
+        files = f.fnamelist()
+        t_win.Element('SORTED_ON').Update(f'Sorted on: {classes[CUR_CLASS]}')
+        offset, currently_displaying = display_images(t_win, 0, files)
