@@ -53,7 +53,7 @@ class dataset_voc(Dataset):
 
     image = PIL.Image.open(f"VOCdevkit/VOC2012/JPEGImages/{self.imgfilenames[idx]}.jpg").convert('RGB')
 
-    classes = [0 if i==-1 else i for i in list(self.df.iloc[idx])]  # column contain all 20 labels
+    classes = [1 if i == 0 else 0 if i==-1 else i for i in list(self.df.iloc[idx])]  # column  # column contain all 20 labels
     #labels = {}
 
     #for index, label in enumerate(self.pv.list_image_sets()):
@@ -177,22 +177,41 @@ def traineval2_model_nocv(dataloader_train, dataloader_test, model, criterion, o
 
     perfmeasure, testloss,concat_labels, concat_pred, fnames = evaluate_meanavgprecision(model, dataloader_test, criterion, device, numcl)
     testlosses.append(testloss)
-    testperfs.append(perfmeasure)
+
 
     print('at epoch: ', epoch,' classwise perfmeasure ', perfmeasure)
     print(f'avg train loss {avgloss}')
     print(f'avg test loss {testloss}')
 
     avgperfmeasure = np.mean(perfmeasure)
+    testperfs.append(avgperfmeasure)
     print('at epoch: ', epoch,' avgperfmeasure ', avgperfmeasure)
     print()
 
-    if avgperfmeasure > best_measure: #higher is better or lower is better?
+    if avgperfmeasure > best_measure and avgperfmeasure > 0.8:
       bestweights = model.state_dict()
       #TODO track current best performance measure and epoch
       torch.save(model.state_dict(), f"models/model{avgperfmeasure}.pth")
+      best_measure = avgperfmeasure
 
       #TODO save your scores
+
+  plt.figure(0)
+  plt.plot(range(num_epochs), trainlosses, label="train")
+  plt.plot(range(num_epochs), testlosses, label="test")
+  plt.title('Loss curve')
+  plt.xlabel('epochs')
+  plt.ylabel('loss')
+  plt.legend(loc="upper right")
+  plt.savefig('plots/traintest_loss.png')
+
+  plt.figure(1)
+  plt.plot(range(num_epochs), testperfs)
+  plt.title('test prefs')
+  plt.xlabel('epochs')
+  plt.ylabel('mAP')
+  plt.savefig('plots/mAP.png')
+
 
   return best_epoch, best_measure, bestweights, trainlosses, testlosses, testperfs
 
@@ -213,13 +232,13 @@ def runstuff():
 
   config['use_gpu'] = True #True #TODO change this to True for training on the cluster, eh
   config['lr'] = 0.001
-  config['batchsize_train'] = 16
+  config['batchsize_train'] = 8
   config['batchsize_val'] = 64
-  config['maxnumepochs'] = 20
+  config['maxnumepochs'] = 30
   #config['maxnumepochs'] = 10
 
-  config['scheduler_stepsize'] = 10
-  config['scheduler_factor'] = 0.3
+  config['scheduler_stepsize'] = 15
+  config['scheduler_factor'] = 0.05
 
   # kind of a dataset property
   config['numcl'] = 20

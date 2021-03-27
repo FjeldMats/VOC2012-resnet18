@@ -59,7 +59,7 @@ class dataset_voc(Dataset):
 
     image = PIL.Image.open(f"VOCdevkit/VOC2012/JPEGImages/{self.imgfilenames[idx]}.jpg").convert('RGB')
 
-    classes = [0 if i==-1 else i for i in list(self.df.iloc[idx])]  # column contain all
+    classes = [1 if i == 0 else 0 if i==-1 else i for i in list(self.df.iloc[idx])]  # column contain all
     if self.transform:
             image = self.transform(image)
 
@@ -122,7 +122,7 @@ model = models.resnet18(pretrained=True) #pretrained resnet18
 num_ftrs = model.fc.in_features
 model.fc = nn.Linear(num_ftrs, config['numcl'])
 
-model.load_state_dict(torch.load("models/model0.814307410057921.pth"))
+model.load_state_dict(torch.load("models/model0.8151495741589873.pth"))
 model = model.to(device)
 print("loaded model")
 
@@ -235,9 +235,15 @@ def convert_to_bytes(file_or_bytes, resize=None, fill=False):
         img.save(bio, format="PNG")
         del img
         return bio.getvalue()
-def display_image_window(filename):
+def display_image_window(filename,f):
     try:
-        layout = [[sg.Image(data=convert_to_bytes(filename, IMAGE_SIZE), enable_events=True)]]
+        index = f.findIndex(filename)
+        str = ""
+        for i in range(20):
+            str += f"{classes[i]} - prediction: {round(float(f.pictures[index].prediction[i]),2)}, label: {f.pictures[index].label[i]}\n"
+
+        layout = [[sg.Image(data=convert_to_bytes(filename, IMAGE_SIZE), enable_events=True)],
+        [sg.Text(str)]]
         e,v = sg.Window(filename, layout, modal=True, element_padding=(0,0), margins=(0,0)).read(close=True)
     except Exception as e:
         print(f'** Display image error **', e)
@@ -309,6 +315,11 @@ class Files():
         for p in self.pictures:
             lst.append(p.filename)
         return lst
+    def findIndex(self, filename):
+        for i in range(len(self.pictures)):
+            if self.pictures[i].filename == filename:
+                return i
+
 
 p = []
 for i in range(len(fnames)):
@@ -330,7 +341,7 @@ while True:
         break
 
     if isinstance(event, tuple):
-        display_image_window(currently_displaying.get(event))
+        display_image_window(currently_displaying.get(event),f)
         continue
     elif event == '-SLIDER-':
         offset = int(values['-SLIDER-']*len(files)/100)
