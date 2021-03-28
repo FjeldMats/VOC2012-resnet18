@@ -1,4 +1,7 @@
 __pycache__/
 .DS_Store
 /VOCdevkit
+/val
+/imagenet300
 *.tar
+*.zip
