@@ -6,5 +6,5 @@
 # Loss
 ![GitHub Logo](/plots/traintest_loss.png)
 
-# Tail accuracy for all 20 classes
-![GitHub Logo](/plots/tailacc_all.png)
+# Average tail accuracy
+![GitHub Logo](/plots/avg_tailacc.png)
