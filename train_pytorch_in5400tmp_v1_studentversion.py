@@ -14,6 +14,8 @@ matplotlib.use('TkAgg') # to work on x11 forwarding
 from torch import Tensor
 
 import time
+import timeit
+from datetime import datetime
 import os
 import numpy as np
 
@@ -53,11 +55,7 @@ class dataset_voc(Dataset):
 
     image = PIL.Image.open(f"VOCdevkit/VOC2012/JPEGImages/{self.imgfilenames[idx]}.jpg").convert('RGB')
 
-    classes = [1 if i == 0 else 0 if i==-1 else i for i in list(self.df.iloc[idx])]  # column  # column contain all 20 labels
-    #labels = {}
-
-    #for index, label in enumerate(self.pv.list_image_sets()):
-    #    labels[label] = classes[index]
+    classes = [1 if i == 0 else 0 if i==-1 else i for i in list(self.df.iloc[idx])]
 
     #apply transfroms to image
     if self.transform:
@@ -75,8 +73,8 @@ def train_epoch(model, trainloader, criterion, device, optimizer):
     losses = []
     for batch_idx, data in enumerate(trainloader):
 
-        if (batch_idx%100==0) and (batch_idx>=100):
-          print('at train batchindex: ', batch_idx)
+        #if (batch_idx%100==0) and (batch_idx>=100):
+        #  print('at train batchindex: ', batch_idx)
 
         inputs = data['image'].to(device)
 
@@ -120,8 +118,8 @@ def evaluate_meanavgprecision(model, dataloader, criterion, device, numcl):
       losses = []
       for batch_idx, data in enumerate(dataloader):
 
-          if (batch_idx%100==0) and (batch_idx>=100):
-            print('at val batchindex: ',batch_idx)
+          #if (batch_idx%100==0) and (batch_idx>=100):
+          # print('at val batchindex: ',batch_idx)
 
           inputs = data['image'].to(device)
 
@@ -164,8 +162,9 @@ def traineval2_model_nocv(dataloader_train, dataloader_test, model, criterion, o
   trainlosses=[]
   testlosses=[]
   testperfs=[]
-
+  bestweights=[]
   for epoch in range(num_epochs):
+    start = timeit.default_timer()
     print('Epoch {}/{}'.format(epoch, num_epochs - 1))
     print('-' * 10)
 
@@ -180,18 +179,18 @@ def traineval2_model_nocv(dataloader_train, dataloader_test, model, criterion, o
 
 
     print('at epoch: ', epoch,' classwise perfmeasure ', perfmeasure)
-    print(f'avg train loss {avgloss}')
-    print(f'avg test loss {testloss}')
+    print(f'train loss: {avgloss}, test loss {testloss}')
 
     avgperfmeasure = np.mean(perfmeasure)
     testperfs.append(avgperfmeasure)
-    print('at epoch: ', epoch,' avgperfmeasure ', avgperfmeasure)
-    print()
+    print('avgperfmeasure ', avgperfmeasure)
+    stop = timeit.default_timer()
+    #print(f'Epoch Finished in {stop - start}\n')
 
     if avgperfmeasure > best_measure and avgperfmeasure > 0.8:
       bestweights = model.state_dict()
       #TODO track current best performance measure and epoch
-      torch.save(model.state_dict(), f"models/model{avgperfmeasure}.pth")
+      torch.save(model.state_dict(), f"models/model_{datetime.now().strftime('%d-%m-%Y_%H:%M:%S')}_{round(float(avgperfmeasure),4)}.pth")
       best_measure = avgperfmeasure
 
       #TODO save your scores
@@ -230,15 +229,15 @@ def runstuff():
 
   config = dict()
 
-  config['use_gpu'] = True #True #TODO change this to True for training on the cluster, eh
-  config['lr'] = 0.001
-  config['batchsize_train'] = 8
-  config['batchsize_val'] = 64
-  config['maxnumepochs'] = 30
+  config['use_gpu'] = True  #TODO change this to True for training on the cluster, eh
+  config['lr'] = 1e-3
+  config['batchsize_train'] = 32
+  config['batchsize_val'] = 128
+  config['maxnumepochs'] = 16
   #config['maxnumepochs'] = 10
 
-  config['scheduler_stepsize'] = 15
-  config['scheduler_factor'] = 0.05
+  config['scheduler_stepsize'] = 10
+  config['scheduler_factor'] = 0.2
 
   # kind of a dataset property
   config['numcl'] = 20
@@ -298,15 +297,13 @@ def runstuff():
   #device
   if True == config['use_gpu']:
       device= torch.device('cuda:0')
-
   else:
       device= torch.device('cpu')
 
   model = models.resnet18(pretrained=True) #pretrained resnet18
-  """
   for param in model.parameters():
       param.requires_grad = False
-  """
+
   #overwrite last linear layer
   num_ftrs = model.fc.in_features
   model.fc = nn.Linear(num_ftrs, config['numcl'])
@@ -318,6 +315,7 @@ def runstuff():
   # Observe that all parameters are being optimized
   someoptimizer = optim.Adam(model.fc.parameters(), lr=config['lr'])
   #someoptimizer = optim.SGD(model.fc.parameters(), lr=config['lr'])
+  #someoptimizer = optim.ASGD(model.fc.parameters(), lr=config['lr'])
 
   # Decay LR by a factor of 0.3 every X epochs
   somelr_scheduler = lr_scheduler.StepLR(someoptimizer, step_size=config['scheduler_stepsize'], gamma=config['scheduler_factor'])

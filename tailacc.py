@@ -10,6 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import matplotlib
+plt.rcParams.update({'figure.max_open_warning': 0}) # plot more than 20
 matplotlib.use('TkAgg') # to work on x11 forwarding
 
 from torch import Tensor
@@ -123,7 +124,7 @@ model = models.resnet18(pretrained=True) #pretrained resnet18
 num_ftrs = model.fc.in_features
 model.fc = nn.Linear(num_ftrs, config['numcl'])
 
-model.load_state_dict(torch.load("models/model0.8151495741589873.pth"))
+model.load_state_dict(torch.load("models/model_27-03-2021_21:43:01_0.8157.pth"))
 model = model.to(device)
 print("loaded model")
 
@@ -226,7 +227,9 @@ def tailacc(t, preds, labels, c):
     return (1/num_above_t) * num_above_t_c
 
 
-
+# plotting tailacc for each class 
+all_ts = []
+all_tailaccs = []
 for c in range(20):
     max_pred_class = concat_pred[0][c]
     for pred in concat_pred:
@@ -243,11 +246,32 @@ for c in range(20):
 
     str = f"{classes[c]}"
 
+    all_ts.append(ts)
+    all_tailaccs.append(tailaccs)
 
     plt.figure(c)
     plt.xlabel('t')
     plt.ylabel('tailacc(t)')
-    #plt.legend(loc="lower right")
     plt.title(f"{classes[c]}")
     plt.plot(ts, tailaccs, label = str)
     plt.savefig(f"plots/tail_{classes[c]}.png")
+
+# taking the mean at each i'th t for a all 20 classes to get avg tail curve
+mean_t = []
+mean_tailacc = []
+for i in range(20):
+    lst = []
+    lst2 = []
+    for j in range(20):
+        lst.append(all_ts[j][i])
+        lst2.append(all_tailaccs[j][i])
+    mean_t.append(np.mean(lst))
+    mean_tailacc.append(np.mean(lst2))
+
+plt.figure(21)
+plt.title("avg tailacc")
+plt.xlabel('t')
+plt.ylabel('tailacc(t)')
+plt.plot(mean_t, mean_tailacc)
+plt.plot()
+plt.savefig("plots/avg_tailacc.png")

@@ -10,7 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import matplotlib
-matplotlib.use('TkAgg') # to work on x11 forwarding
+matplotlib.use('Agg') # to work on x11 forwarding
 
 from torch import Tensor
 
@@ -122,7 +122,7 @@ model = models.resnet18(pretrained=True) #pretrained resnet18
 num_ftrs = model.fc.in_features
 model.fc = nn.Linear(num_ftrs, config['numcl'])
 
-model.load_state_dict(torch.load("models/model0.8151495741589873.pth"))
+model.load_state_dict(torch.load("models/model_27-03-2021_21:43:01_0.8157.pth"))
 model = model.to(device)
 print("loaded model")
 
@@ -189,7 +189,7 @@ classes = ['aeroplane', 'bicycle', 'bird', 'boat',
 
 CUR_CLASS = 0
 THUMBNAIL_SIZE = (200,200)
-IMAGE_SIZE = (800,800)
+IMAGE_SIZE = (400,400)
 THUMBNAIL_PAD = (1,1)
 ROOT_FOLDER = r'VOCdevkit/VOC2012/JPEGImages'
 screen_size = [1280, 720]
@@ -238,9 +238,14 @@ def convert_to_bytes(file_or_bytes, resize=None, fill=False):
 def display_image_window(filename,f):
     try:
         index = f.findIndex(filename)
-        str = ""
+        str = "{:<20s}{:^10s}{:>10s}\n".format("class", "prediction", "label")
+        str += "-"*50 + "\n"
         for i in range(20):
-            str += f"{classes[i]} - prediction: {round(float(f.pictures[index].prediction[i]),2)}, label: {f.pictures[index].label[i]}\n"
+            pred = round(float(f.pictures[index].prediction[i]),2)
+            label = f.pictures[index].label[i]
+            if(label == 1 or pred > 0.5):
+                #str += f"{classes[i]} - prediction: {pred)}, label: {label}\n"
+                str += "{:<20s}{:^10.2f}{:>10.2f}\n".format(classes[i], pred, label)
 
         layout = [[sg.Image(data=convert_to_bytes(filename, IMAGE_SIZE), enable_events=True)],
         [sg.Text(str)]]
